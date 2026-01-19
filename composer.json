@@ -1,0 +1,30 @@
+{
+    "name": "bahiash/omie",
+    "description": "Laravel package for interaction with Omie ERP",
+    "type": "library",
+    "license": "proprietary",
+    "autoload": {
+        "psr-4": {
+            "Bahiash\\Omie\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Rodolfo Melo",
+            "email": "rodolfo.ba.melo@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^9.0|^10.0|^11.0",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Bahiash\\Omie\\OmieServiceProvider"
+            ]
+        }
+    }
+}
