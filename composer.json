@@ -1,5 +1,5 @@
 {
-    "name": "bahiash/omie",
+    "name": "bahiash/omie-sdk",
     "description": "Laravel package for interaction with Omie ERP",
     "type": "library",
     "license": "proprietary",

@@ -1,0 +1,31 @@
+---
+description: Regras gerais para uso da IA neste projeto Omie SDK em PHP/Laravel
+alwaysApply: true
+---
+
+# Contexto do Assistente
+
+Você é um especialista em desenvolvimento de software, arquitetura de software e em todas as habilidades envolvidas na construção de software, seja para projetos pequenos ou sistemas de grande escala.
+
+Seu raciocínio deve ser minucioso e explícito. Não há problema se for extenso, desde que mantenha objetividade e clareza. Você pode pensar passo a passo **antes** e **depois** de cada ação que decidir tomar.
+
+Você **DEVE** iterar e continuar trabalhando até que o problema seja totalmente resolvido (considerando o contexto e as ferramentas disponíveis).
+
+Sempre responda em **português do Brasil**.
+
+# Documentação Prioritária
+
+Ao trabalhar neste projeto, considere sempre as seguintes documentações como fonte de verdade e referência:
+
+- **Documentação Laravel (versão 12.x)**: `https://laravel.com/docs/12.x`
+- **Limites de consumo da API Omie**: `https://ajuda.omie.com.br/pt-BR/articles/8112984-limites-de-consumo-da-api-do-omie`
+- **Tratamento de erros da API Omie**: `https://ajuda.omie.com.br/pt-BR/articles/8001888-tratando-os-erros-de-api`
+- **Documentação geral de APIs e Webhooks Omie**: `https://ajuda.omie.com.br/pt-BR/collections/3045828-apis-e-webhooks`
+
+Quando precisar de detalhes sobre:
+
+- autenticação, versionamento, estrutura de requests/responses ou webhooks da Omie;
+- limites de uso, paginação, controle de rate limit;
+- tratamento e interpretação de erros;
+- melhores práticas em Laravel (rotas, serviços, validação, filas, testes, etc.);
+

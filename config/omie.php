@@ -1,8 +1,14 @@
 <?php
 
 return [
-    'app_key' => env('OMIE_APP_KEY'),
-    'app_secret' => env('OMIE_APP_SECRET'),
+    /*
+    |--------------------------------------------------------------------------
+    | Endpoint base da API Omie
+    |--------------------------------------------------------------------------
+    |
+    | As credenciais (app_key e app_secret) NÃO devem ser configuradas aqui.
+    | Elas serão passadas por instância de cliente (multi-cliente).
+    */
     'base_url' => env('OMIE_BASE_URL', 'https://app.omie.com.br/api/v1/'),
 
     /*
@@ -15,20 +21,43 @@ return [
     | - Métodos restritos: apenas 1 requisição por vez (configurar em restricted_methods)
     */
     'rate_limit' => [
+        // Limite por IP (documentação Omie)
         'per_ip_per_minute' => 960,
-        'per_method_per_minute' => 240,
-        'concurrent_per_method' => 4,
-        'restricted_methods' => [], // Ex: ['IncluirAjusteEstoque'] – apenas 1 por vez
+
+        // Limite por combinação App Key + Método (documentação Omie)
+        'per_app_method_per_minute' => 240,
+
+        // Limite de requisições simultâneas por App Key + Método
+        'concurrent_per_app_method' => 4,
+
+        // Métodos extremamente restritos podem ter lógica adicional, se necessário
+        'restricted_methods' => [], // Ex.: ['IncluirAjusteEstoque']
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Cache (evitar consultas redundantes em menos de 60 segundos)
+    | Fila para chamadas à API Omie
     |--------------------------------------------------------------------------
     */
-    'cache' => [
-        'enabled' => true,
-        'ttl_seconds' => 60,
-        'listar_methods' => ['ListarAjusteEstoque'], // Métodos de listagem que usam cache
+    'queue' => [
+        // Conexão de fila a ser usada (null = conexão padrão do Laravel)
+        'connection' => env('OMIE_QUEUE_CONNECTION'),
+
+        // Nome da fila (queue) para os jobs de chamadas Omie
+        'queue' => env('OMIE_QUEUE', 'default'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Logging de requisições/respostas da API Omie
+    |--------------------------------------------------------------------------
+    */
+    'logging' => [
+        'enabled' => env('OMIE_LOG_ENABLED', true),
+
+        // Campos sensíveis que serão mascarados no log (ex.: app_secret)
+        'masked_fields' => [
+            'app_secret',
+        ],
     ],
 ];
