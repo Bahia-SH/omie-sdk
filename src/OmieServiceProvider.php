@@ -2,9 +2,8 @@
 
 namespace Bahiash\Omie;
 
-use Bahiash\Omie\Services\AjusteEstoqueService;
-use GuzzleHttp\Client;
-use GuzzleHttp\ClientInterface;
+use Bahiash\Omie\Logging\OmieApiLogger;
+use Bahiash\Omie\Services\ProdutosService;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -17,39 +16,35 @@ class OmieServiceProvider extends ServiceProvider
             'omie'
         );
 
-        $this->app->singleton(OmieClient::class, function ($app) {
-            $config = config('omie');
-            $guzzle = $app->bound(ClientInterface::class)
-                ? $app->make(ClientInterface::class)
-                : new Client([
-                    'base_uri' => $config['base_url'],
-                    'timeout' => 30,
-                    'headers' => [
-                        'Content-Type' => 'application/json',
-                    ],
-                ]);
+        $this->app->singleton(OmieRateLimiter::class, function ($app) {
+            /** @var CacheRepository $cache */
+            $cache = $app->make(CacheRepository::class);
 
-            $cache = $app->bound(CacheRepository::class)
-                ? $app->make(CacheRepository::class)
-                : null;
+            $config = \function_exists('config') ? \call_user_func('config', 'omie') : require __DIR__ . '/../config/omie.php';
 
-            return new OmieClient($config, $guzzle, $cache);
+            return new OmieRateLimiter($cache, $config);
         });
 
-        $this->app->alias(OmieClient::class, 'omie.client');
-
-        $this->app->singleton(AjusteEstoqueService::class, function ($app) {
-            return new AjusteEstoqueService($app->make(OmieClient::class));
+        $this->app->singleton(OmieApiLogger::class, function () {
+            return new OmieApiLogger();
         });
 
-        $this->app->alias(AjusteEstoqueService::class, 'omie.ajuste_estoque');
+        $this->app->singleton(ProdutosService::class, function () {
+            return new ProdutosService();
+        });
     }
 
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
+            $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+
+            $target = \function_exists('config_path')
+                ? \call_user_func('config_path', 'omie.php')
+                : 'config/omie.php';
+
             $this->publishes([
-                __DIR__ . '/../config/omie.php' => config_path('omie.php'),
+                __DIR__ . '/../config/omie.php' => $target,
             ], 'omie-config');
         }
     }
