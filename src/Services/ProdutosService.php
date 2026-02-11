@@ -8,12 +8,16 @@ class ProdutosService
 {
     protected const SERVICE_PATH = 'geral/produtos';
 
+    /**
+     * @param  array<string, mixed>  $eventParams
+     */
     public function dispatchCall(
         string $appKey,
         string $appSecret,
         string $method,
         array $params = [],
-        ?string $correlationId = null
+        ?string $eventClass = null,
+        array $eventParams = []
     ): void {
         /** @phpstan-ignore-next-line Método dispatch é fornecido por Illuminate\Queue\Jobs helpers em runtime */
         DispatchOmieCallJob::dispatch(
@@ -22,7 +26,8 @@ class ProdutosService
             self::SERVICE_PATH,
             $method,
             $params,
-            $correlationId
+            $eventClass,
+            $eventParams
         );
     }
 }

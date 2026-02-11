@@ -54,7 +54,7 @@ class OmieRateLimiter
 
     protected function waitForCountLimit(string $countKey, int $limit, string $lockKey): void
     {
-        $maxWait = 70;
+        $maxWait = (int) ($this->config['rate_limit']['max_wait_seconds'] ?? 70);
         $waited = 0;
 
         while ($waited < $maxWait) {
@@ -93,7 +93,7 @@ class OmieRateLimiter
 
     protected function waitForConcurrentLimit(string $counterKey, int $limit, string $lockKey): void
     {
-        $maxWait = 120;
+        $maxWait = (int) ($this->config['rate_limit']['max_wait_concurrent_seconds'] ?? 120);
         $waited = 0;
 
         while ($waited < $maxWait) {

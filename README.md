@@ -51,7 +51,8 @@ public function criarProduto(ProdutosService $produtos)
         [
             // parâmetros conforme documentação da API de produtos Omie
         ],
-        correlationId: 'opcional-para-rastreio'
+        \App\Events\ProdutoIncluidoNaOmie::class,  // evento disparado ao concluir (opcional)
+        ['product_id' => $product->id]             // parâmetros passados ao evento
     );
 }
 ```
@@ -68,8 +69,10 @@ A tabela `omie_api_logs` armazena:
 - `app_key`, `service_path`, `method`.
 - `request_body` (com campos sensíveis mascarados).
 - `response_body`, `http_status`, `omie_status_code`, `omie_status_message`.
-- `duration_ms`, `ip_origem`, `correlation_id`.
+- `duration_ms`, `ip_origem`, `event_class`, `event_params`.
 - Informações de erro (`error_class`, `error_message`, `error_trace`).
+
+Quando informados `event_class` e `event_params` na chamada, ao concluir (sucesso ou erro) o pacote dispara o evento `new $eventClass($log, $eventParams)`, permitindo à aplicação processar a resposta (ex.: atualizar uma model de origem). Não há evento padrão; se `event_class` for omitido, nenhum evento é disparado.
 
 Você pode consultar os logs normalmente via Eloquent:
 
@@ -91,4 +94,15 @@ O `OmieRateLimiter` utiliza o cache para manter contadores por minuto e por mét
 - Limite de requisições simultâneas por App Key + método.
 
 Se os limites forem excedidos, o Job aguardará a liberação dentro de um tempo máximo configurado; se o tempo se esgotar, será lançada uma `OmieRateLimitExceededException`.
+
+### Testes
+
+Para executar a suíte de testes do pacote:
+
+```bash
+composer install
+vendor/bin/phpunit
+```
+
+Os testes cobrem: `OmieClient`, `OmieRateLimiter`, `DispatchOmieCallJob`, `ProdutosService`, `OmieApiLogger`, modelo `OmieApiLog`, exceções e o `OmieServiceProvider`.
 

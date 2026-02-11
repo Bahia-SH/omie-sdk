@@ -14,6 +14,7 @@ class OmieApiLog extends \Illuminate\Database\Eloquent\Model
     protected $casts = [
         'request_body' => 'array',
         'response_body' => 'array',
+        'event_params' => 'array',
     ];
 }
 
