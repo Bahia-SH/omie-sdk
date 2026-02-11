@@ -6,9 +6,9 @@ return new class extends \Illuminate\Database\Migrations\Migration
     {
         \Illuminate\Support\Facades\Schema::create('omie_api_logs', function (\Illuminate\Database\Schema\Blueprint $table) {
             $table->id();
-            $table->string('app_key')->index()->index();
-            $table->string('service_path')->index();
-            $table->string('method')->index();
+            $table->string('app_key');
+            $table->string('service_path');
+            $table->string('method');
             $table->json('request_body')->nullable();
             $table->json('response_body')->nullable();
             $table->unsignedSmallInteger('http_status')->nullable();
@@ -16,11 +16,15 @@ return new class extends \Illuminate\Database\Migrations\Migration
             $table->string('omie_status_message')->nullable();
             $table->unsignedInteger('duration_ms')->nullable();
             $table->string('ip_origem')->nullable();
-            $table->string('correlation_id')->nullable()->index();
             $table->string('error_class')->nullable();
             $table->text('error_message')->nullable();
             $table->longText('error_trace')->nullable();
+            $table->string('event_class')->nullable()->index();
+            $table->json('event_params')->nullable()->index();
             $table->timestamps();
+
+            $table->index(['app_key', 'service_path', 'method']);
+            $table->index(['event_class', 'event_params']);
         });
     }
 

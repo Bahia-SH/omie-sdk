@@ -7,23 +7,19 @@ use Bahiash\Omie\Models\OmieApiLog;
 use Bahiash\Omie\OmieClient;
 use Bahiash\Omie\OmieRateLimiter;
 use GuzzleHttp\ClientInterface;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class DispatchOmieCallJob implements ShouldQueue
 {
-    /**
-     * Conexão de fila a ser utilizada pelo job.
-     */
-    public ?string $connection = null;
-
-    /**
-     * Nome da fila (queue) a ser utilizada pelo job.
-     */
-    public ?string $queue = null;
+    use Dispatchable;
+    use Queueable;
 
     public string $appKey;
 
@@ -38,29 +34,47 @@ class DispatchOmieCallJob implements ShouldQueue
      */
     public array $params;
 
-    public ?string $correlationId;
+    public ?string $eventClass;
 
+    /**
+     * @var array<string, mixed>
+     */
+    public ?array $eventParams;
+
+    /**
+     * @var array<string, mixed>
+     */
+
+     protected ?array $config;
+
+    /**
+     * @param  array<int|string, mixed>  $params
+     * @param  array<string, mixed>  $eventParams
+     */
     public function __construct(
         string $appKey,
         string $appSecret,
         string $servicePath,
         string $method,
         array $params = [],
-        ?string $correlationId = null
+        ?string $eventClass = null,
+        ?array $eventParams = null
     ) {
         $this->appKey = $appKey;
         $this->appSecret = $appSecret;
         $this->servicePath = $servicePath;
         $this->method = $method;
         $this->params = $params;
-        $this->correlationId = $correlationId;
+        $this->eventClass = $eventClass;
+        $this->eventParams = $eventParams ?? [];
 
-        $queueConfig = Config::get('omie.queue', []);
-        if (! empty($queueConfig['connection'])) {
-            $this->connection = $queueConfig['connection'];
+        $this->config = Config::get('omie', []);
+
+        if (! empty($this->config['queue']['connection'])) {
+            $this->onConnection($this->config['queue']['connection']);
         }
-        if (! empty($queueConfig['queue'])) {
-            $this->queue = $queueConfig['queue'];
+        if (! empty($this->config['queue']['queue'])) {
+            $this->onQueue($this->config['queue']['queue']);
         }
     }
 
@@ -69,8 +83,8 @@ class DispatchOmieCallJob implements ShouldQueue
         OmieApiLogger $logger,
         ClientInterface $http
     ): void {
-        $config = Config::get('omie');
-        $baseUrl = (string) Arr::get($config, 'base_url', 'https://app.omie.com.br/api/v1/');
+        
+        $baseUrl = (string) Arr::get($this->config, 'base_url', 'https://app.omie.com.br/api/v1/');
         $ip = null;
 
         $start = microtime(true);
@@ -91,7 +105,8 @@ class DispatchOmieCallJob implements ShouldQueue
             'method' => $this->method,
             'request_body' => $maskedRequest,
             'ip_origem' => $ip,
-            'correlation_id' => $this->correlationId,
+            'event_class' => $this->eventClass,
+            'event_params' => $this->eventParams,
         ]);
 
         try {
@@ -116,6 +131,8 @@ class DispatchOmieCallJob implements ShouldQueue
                     'omie_status_message' => $omieStatusMessage,
                 ]
             );
+
+            $this->dispatchEvent($log);
         } catch (Throwable $e) {
             $durationMs = (int) ((microtime(true) - $start) * 1000);
 
@@ -128,16 +145,31 @@ class DispatchOmieCallJob implements ShouldQueue
                 ]
             );
 
+            $this->dispatchEvent($log);
+
             Log::error('Erro ao chamar API Omie', [
                 'exception' => $e,
                 'app_key' => $this->appKey,
                 'service_path' => $this->servicePath,
                 'method' => $this->method,
-                'correlation_id' => $this->correlationId,
+                'event_params' => $this->eventParams,
             ]);
 
             throw $e;
         }
+    }
+
+    protected function dispatchEvent(OmieApiLog $log): void
+    {
+        if ($this->eventClass === null || $this->eventClass === '') {
+            return;
+        }
+
+        if (! class_exists($this->eventClass)) {
+            return;
+        }
+
+        Event::dispatch(new $this->eventClass($log, $this->eventParams));
     }
 
     /**
