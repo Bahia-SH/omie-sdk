@@ -7,6 +7,7 @@ use Bahiash\Omie\Models\OmieApiLog;
 use Bahiash\Omie\OmieClient;
 use Bahiash\Omie\OmieRateLimiter;
 use GuzzleHttp\ClientInterface;
+
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

@@ -4,6 +4,8 @@ namespace Bahiash\Omie;
 
 use Bahiash\Omie\Logging\OmieApiLogger;
 use Bahiash\Omie\Services\ProdutosService;
+use GuzzleHttp\Client as GuzzleClient;
+use GuzzleHttp\ClientInterface;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -15,6 +17,21 @@ class OmieServiceProvider extends ServiceProvider
             __DIR__ . '/../config/omie.php',
             'omie'
         );
+
+        if (! $this->app->bound(ClientInterface::class)) {
+            $this->app->singleton(ClientInterface::class, function () {
+                $baseUrl = \function_exists('config') ? \call_user_func('config', 'omie.base_url') : null;
+                $baseUrl = $baseUrl ?: 'https://app.omie.com.br/api/v1/';
+
+                return new GuzzleClient([
+                    'base_uri' => $baseUrl,
+                    'timeout' => 30,
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                    ],
+                ]);
+            });
+        }
 
         $this->app->singleton(OmieRateLimiter::class, function ($app) {
             /** @var CacheRepository $cache */
