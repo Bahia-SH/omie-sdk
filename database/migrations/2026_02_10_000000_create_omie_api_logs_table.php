@@ -19,12 +19,12 @@ return new class extends \Illuminate\Database\Migrations\Migration
             $table->string('error_class')->nullable();
             $table->text('error_message')->nullable();
             $table->longText('error_trace')->nullable();
-            $table->string('event_class')->nullable()->index();
-            $table->json('event_params')->nullable()->index();
+            $table->string('event_class')->nullable();
+            $table->json('event_params')->nullable();
             $table->timestamps();
 
             $table->index(['app_key', 'service_path', 'method']);
-            $table->index(['event_class', 'event_params']);
+            $table->index(['event_class']);
         });
     }
 
@@ -33,4 +33,3 @@ return new class extends \Illuminate\Database\Migrations\Migration
         \Illuminate\Support\Facades\Schema::dropIfExists('omie_api_logs');
     }
 };
-
