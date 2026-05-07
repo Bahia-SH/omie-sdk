@@ -35,13 +35,11 @@ class OmieServiceProviderTest extends TestCase
         $this->assertSame($a, $b);
     }
 
-    public function test_produtos_service_registrado_como_singleton(): void
+    public function test_produtos_service_resolvivel_pelo_container(): void
     {
-        $a = $this->app->make(ProdutosService::class);
-        $b = $this->app->make(ProdutosService::class);
+        $service = $this->app->make(ProdutosService::class);
 
-        $this->assertInstanceOf(ProdutosService::class, $a);
-        $this->assertSame($a, $b);
+        $this->assertInstanceOf(ProdutosService::class, $service);
     }
 
     public function test_migrations_existem_em_package(): void

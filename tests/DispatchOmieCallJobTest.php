@@ -52,7 +52,7 @@ class DispatchOmieCallJobTest extends TestCase
 
         $rateLimiter = $this->createMock(OmieRateLimiter::class);
         $rateLimiter->expects($this->once())
-            ->method('checkOrWait')
+            ->method('acquire')
             ->with('key1', 'ListarProdutos', null);
 
         $logger = $this->createMock(OmieApiLogger::class);

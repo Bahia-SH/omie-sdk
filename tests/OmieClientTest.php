@@ -152,7 +152,7 @@ class OmieClientTest extends TestCase
         $client = new OmieClient('my-key', 'my-secret', 'https://app.omie.com.br/api/v1/', $http);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Resposta inválida da API OMIE');
+        $this->expectExceptionMessage('Resposta inválida da API Omie');
 
         $client->call('geral/produtos', 'ListarProdutos', []);
     }
@@ -170,7 +170,7 @@ class OmieClientTest extends TestCase
         $this->assertSame('null', $result['raw']);
     }
 
-    public function test_guzzle_exception_é_repassada(): void
+    public function test_guzzle_exception_é_envolvida_em_omie_api_exception(): void
     {
         $http = $this->createMock(ClientInterface::class);
         $http->expects($this->once())
@@ -179,7 +179,7 @@ class OmieClientTest extends TestCase
 
         $client = new OmieClient('my-key', 'my-secret', 'https://app.omie.com.br/api/v1/', $http);
 
-        $this->expectException(RequestException::class);
+        $this->expectException(\Bahiash\Omie\Exceptions\OmieApiException::class);
         $this->expectExceptionMessage('Connection failed');
 
         $client->call('geral/produtos', 'ListarProdutos', []);

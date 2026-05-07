@@ -33,7 +33,10 @@
         "laravel": {
             "providers": [
                 "Bahiash\\Omie\\OmieServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "Omie": "Bahiash\\Omie\\Facades\\Omie"
+            }
         }
     }
 }

@@ -10,7 +10,7 @@ class ExceptionsTest extends TestCase
     public function test_omie_api_exception_armazena_status_code_e_payload(): void
     {
         $previous = new \RuntimeException('Previous');
-        $e = new OmieApiException('Erro da API', 429, ['faultstring' => 'Too Many Requests'], $previous);
+        $e = new OmieApiException('Erro da API', 429, ['faultstring' => 'Too Many Requests'], null, 'Too Many Requests', true, $previous);
 
         $this->assertSame('Erro da API', $e->getMessage());
         $this->assertSame(429, $e->statusCode);

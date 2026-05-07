@@ -1,108 +1,228 @@
-## Omie SDK – Visão geral
+# Omie SDK
 
-Este pacote fornece uma integração com a API do Omie preparada para:
+Pacote Laravel pra integrar com API Omie. Multi-tenant, com fila, rate-limit, log estruturado e feedback claro pro programador.
 
-- Uso **multi-cliente** (várias `app_key`/`app_secret` na mesma aplicação).
-- Chamadas **sempre enfileiradas** via Jobs Laravel.
-- **Rate limit** seguindo a documentação oficial (por IP, por App Key + método e concorrência).
-- **Log completo em banco de dados** de todas as requisições/respostas.
-
-### Instalação básica
-
-1. Adicione o pacote via `composer` no seu projeto Laravel.
-2. Publique o arquivo de configuração:
+## Instalação
 
 ```bash
+composer require bahiash/omie-sdk
 php artisan vendor:publish --tag=omie-config
-```
-
-3. Garanta que você está usando um driver de cache que suporte *locks* (ex.: `redis` ou `database`).
-4. Execute as migrações para criar a tabela de logs:
-
-```bash
 php artisan migrate
 ```
 
-### Configuração
+Auto-discovery: `OmieServiceProvider` + facade `Omie`.
 
-O arquivo `config/omie.php` controla:
+## Configuração mínima
 
-- `base_url`: endpoint base da API Omie.
-- `rate_limit`: limites por IP, por App Key + método e concorrência, conforme documentação do Omie.
-- `queue`: conexão e nome da fila onde os Jobs serão executados.
-- `logging`: habilitar/desabilitar logs e campos sensíveis a serem mascarados.
+`.env`:
 
-### Uso multi-cliente
+```
+OMIE_QUEUE_CONNECTION=redis
+OMIE_QUEUE=omie
+OMIE_HTTP_TIMEOUT=30
+OMIE_HTTP_RETRY_ENABLED=true
+```
 
-Em vez de configurar uma única `app_key` global, você passa as credenciais para cada chamada/cliente. Para produtos:
+Cache **deve** suportar locks (`redis` ou `database`).
+
+## Uso
+
+### Async (fila) — padrão
 
 ```php
-use Bahiash\Omie\Services\ProdutosService;
+use Bahiash\Omie\Facades\Omie;
 
-public function criarProduto(ProdutosService $produtos)
-{
-    $appKey = 'APP_KEY_DO_CLIENTE';
-    $appSecret = 'APP_SECRET_DO_CLIENTE';
+$correlationId = Omie::for($appKey, $appSecret, tenantId: $tenant->id)
+    ->produtos()
+    ->dispatch('ListarProdutos', [
+        ['pagina' => 1, 'registros_por_pagina' => 50],
+    ]);
 
-    $produtos->dispatchCall(
-        $appKey,
-        $appSecret,
-        'IncluirProduto',
-        [
-            // parâmetros conforme documentação da API de produtos Omie
-        ],
-        \App\Events\ProdutoIncluidoNaOmie::class,  // evento disparado ao concluir (opcional)
-        ['product_id' => $product->id]             // parâmetros passados ao evento
-    );
+// $correlationId = uuid → use pra rastrear o log
+```
+
+### Síncrono — quando precisar resposta imediata
+
+```php
+$log = Omie::for($appKey, $appSecret)
+    ->produtos()
+    ->call('ConsultarProduto', [['codigo_produto_integracao' => 'ABC']]);
+
+if ($log->wasSuccessful()) {
+    $produto = $log->response_body;
+} else {
+    // $log->omie_fault_code, $log->omie_fault_string, $log->retryable
 }
 ```
 
-A chamada será:
-- Enfileirada na fila configurada.
-- Passará pelo `OmieRateLimiter` (IP + App Key + método + concorrência).
-- Terá request/response registrados na tabela `omie_api_logs`.
+### Generic — qualquer endpoint Omie
 
-### Logs em banco
+```php
+Omie::for($appKey, $appSecret)
+    ->dispatch('produtos/familias', 'ListarFamilias', [['pagina' => 1]]);
+```
 
-A tabela `omie_api_logs` armazena:
+### Aguardar resultado de chamada async
 
-- `app_key`, `service_path`, `method`.
-- `request_body` (com campos sensíveis mascarados).
-- `response_body`, `http_status`, `omie_status_code`, `omie_status_message`.
-- `duration_ms`, `ip_origem`, `event_class`, `event_params`.
-- Informações de erro (`error_class`, `error_message`, `error_trace`).
+```php
+$id = Omie::for($k, $s)->produtos()->dispatch('ListarProdutos', [...]);
 
-Quando informados `event_class` e `event_params` na chamada, ao concluir (sucesso ou erro) o pacote dispara o evento `new $eventClass($log, $eventParams)`, permitindo à aplicação processar a resposta (ex.: atualizar uma model de origem). Não há evento padrão; se `event_class` for omitido, nenhum evento é disparado.
+$log = Omie::waitFor($id, timeoutSeconds: 30);
 
-Você pode consultar os logs normalmente via Eloquent:
+$log->wasSuccessful();   // bool
+$log->response_body;     // array
+$log->omie_fault_code;   // ex: "SOAP-ENV:Client-101"
+$log->retryable;         // bool
+```
+
+### Eventos
+
+Dois eventos disparados automaticamente:
+
+- `Bahiash\Omie\Events\OmieCallSucceeded`
+- `Bahiash\Omie\Events\OmieCallFailed`
+
+Listener:
+
+```php
+use Bahiash\Omie\Events\OmieCallSucceeded;
+
+class ProcessarProdutoOmie
+{
+    public function handle(OmieCallSucceeded $event): void
+    {
+        $log = $event->getLog();
+        $params = $event->getEventParams();   // ex: ['pedido_id' => 42]
+
+        // log->response_body já decodificado
+    }
+}
+```
+
+`EventServiceProvider`:
+
+```php
+protected $listen = [
+    OmieCallSucceeded::class => [ProcessarProdutoOmie::class],
+    OmieCallFailed::class    => [NotificarFalhaOmie::class],
+];
+```
+
+Passar `eventParams` na chamada:
+
+```php
+Omie::for($k, $s)->produtos()->dispatch(
+    'IncluirProduto',
+    [$produto],
+    eventClass: null,
+    eventParams: ['origem_id' => 99]
+);
+```
+
+### Tratamento de erro
+
+```php
+use Bahiash\Omie\Exceptions\OmieApiException;
+
+try {
+    $log = Omie::for($k, $s)->produtos()->call('IncluirProduto', [$dados]);
+} catch (OmieApiException $e) {
+    $e->getOmieFaultCode();    // SOAP-ENV:Client-101
+    $e->getOmieFaultString();  // mensagem original Omie
+    $e->getHttpStatus();       // 400/500/etc
+    $e->isRateLimited();       // bool
+    $e->isRetryable();         // bool
+}
+```
+
+## Tabela de log (`omie_api_logs`)
+
+Colunas chave:
+
+| Coluna | Uso |
+|---|---|
+| `correlation_id` | uuid retornado pelo `dispatch()`/`call()` |
+| `tenant_id` | identificador opcional do tenant |
+| `status` | `pending` / `running` / `success` / `failed` |
+| `attempt` | tentativa do job |
+| `omie_fault_code` / `omie_fault_string` | erro estruturado Omie |
+| `retryable` | indica se erro pode ser re-tentado |
+| `duration_ms`, `finished_at` | métricas |
+| `request_body`, `response_body` | payload mascarado |
+
+Recuperar log direto:
 
 ```php
 use Bahiash\Omie\Models\OmieApiLog;
 
-$logs = OmieApiLog::where('app_key', 'APP_KEY_DO_CLIENTE')
-    ->where('method', 'IncluirProduto')
-    ->latest()
-    ->get();
+$log = OmieApiLog::findByCorrelationId($id);
 ```
 
-### Rate limit
+## Rate Limiting
 
-O `OmieRateLimiter` utiliza o cache para manter contadores por minuto e por método, seguindo as regras oficiais:
+Limites Omie aplicados automaticamente no worker:
 
-- Limite por IP/minuto.
-- Limite por App Key + método/minuto.
-- Limite de requisições simultâneas por App Key + método.
+- 960/min por IP
+- 240/min por app+method
+- 4 simultâneas por app+method (com `acquire`/`release` em `finally`)
 
-Se os limites forem excedidos, o Job aguardará a liberação dentro de um tempo máximo configurado; se o tempo se esgotar, será lançada uma `OmieRateLimitExceededException`.
+Configuração em `config/omie.php` → `rate_limit`. Estratégia `fixed` (default) ou `sliding` (Redis sorted set).
 
-### Testes
+## Mascaramento de dados sensíveis
 
-Para executar a suíte de testes do pacote:
+Recursivo. Configure em `config/omie.php` → `logging.masked_fields`:
+
+```php
+'masked_fields' => ['app_secret','password','cnpj_cpf','cpf','token'],
+```
+
+Aplica em `request_body`, `response_body` e `event_params` (request body — request `app_secret` nunca chega ao log porque o job só persiste `params`, não as credenciais).
+
+## Retry
+
+Job tem `tries` e `backoff` configuráveis em `config('omie.queue')`. Erros marcados `retryable=false` (ex: validação Omie 4xx) chamam `fail()` direto, sem retentar.
+
+## Modelo de extensão
+
+Adicionar novo recurso = uma classe vazia:
+
+```php
+namespace App\Omie;
+
+use Bahiash\Omie\Services\AbstractOmieService;
+
+class FamiliasService extends AbstractOmieService
+{
+    public const SERVICE_PATH = 'produtos/familias';
+}
+```
+
+Ou usar `Omie::for(...)->dispatch($servicePath, $method, $params)` direto (generic), sem criar classe.
+
+## Arquitetura (resumo)
+
+```
+Service (Produtos|Clientes|...|Generic)
+  └─ DispatchOmieCallJob (gera correlation_id, captura IP)
+       └─ worker → handle()
+            ├─ logger->startLog (status=running, mascara recursivo)
+            ├─ rateLimiter->acquire (IP + app+method + concurrent)
+            ├─ try
+            │    ├─ new OmieClient(...)->call()  (timeout/retry/parse fault)
+            │    ├─ logger->finishLogSuccess
+            │    └─ Event::dispatch(OmieCallSucceeded)
+            ├─ catch
+            │    ├─ logger->finishLogError (com omie_fault_code, retryable)
+            │    ├─ Event::dispatch(OmieCallFailed)
+            │    └─ if !retryable → $this->fail(); senão rethrow (retry)
+            └─ finally
+                 └─ rateLimiter->releaseConcurrent
+```
+
+## Comandos úteis
 
 ```bash
 composer install
 vendor/bin/phpunit
+vendor/bin/phpunit --filter testMethodName
 ```
-
-Os testes cobrem: `OmieClient`, `OmieRateLimiter`, `DispatchOmieCallJob`, `ProdutosService`, `OmieApiLogger`, modelo `OmieApiLog`, exceções e o `OmieServiceProvider`.
-
